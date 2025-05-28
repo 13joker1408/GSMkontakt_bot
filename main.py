@@ -9,24 +9,26 @@ from telegram import (
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes,
-    filters, ConversationHandler, CallbackQueryHandler
+    filters, ConversationHandler, CallbackQueryHandler, ApplicationBuilder
 )
-from telegram.ext import ApplicationBuilder
 
+# Загрузка .env и настройка логгирования
 load_dotenv()
-
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
+# Переменные среды
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 216903753))
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "supersecretpath")
 APP_URL = os.getenv("RENDER_EXTERNAL_URL")
 
+# Состояния формы
 MODEL, CONDITION, KIT, DISTRICT, PHONE = range(5)
 
+# Клавиатуры
 main_menu_keyboard = [
     [KeyboardButton("ℹ️ О нас")],
     [KeyboardButton("🏬 Адреса и контакты")]
@@ -39,28 +41,36 @@ inline_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("Позвонить: +7 800 302-20-71", callback_data="show_phone")]
 ])
 
+# FastAPI + Telegram
 app = FastAPI()
 telegram_app: Application = None
 
+# Команды и логика
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Выбери действие:", reply_markup=inline_menu)
-    await update.message.reply_text("Или используй кнопки ниже для информации:", reply_markup=main_menu)
-    
+    if update.message:
+        await update.message.reply_text("Выбери действие:", reply_markup=inline_menu)
+        await update.message.reply_text("Или используй кнопки ниже для информации:", reply_markup=main_menu)
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
     if query.data == "show_phone":
         await query.edit_message_text("Позвонить можно по номеру: +7 800 302-20-71")
 
 async def start_form_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
     await query.message.reply_text("Напиши модель твоей техники:")
     return MODEL
 
 async def start_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Напиши модель твоей техники:")
-    return MODEL
+    if update.message:
+        await update.message.reply_text("Напиши модель твоей техники:")
+        return MODEL
 
 async def model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['model'] = update.message.text
@@ -87,18 +97,18 @@ async def district(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PHONE
 
 async def phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    contact = update.message.contact
+    contact = update.message.contact if update.message else None
     if contact:
         phone_number = contact.phone_number
         context.user_data['phone'] = phone_number
 
-        username = update.effective_user.username
+        username = update.effective_user.username or "не указан"
         full_name = f"{update.effective_user.first_name or ''} {update.effective_user.last_name or ''}".strip()
 
         summary = (
             f"📦 Новая заявка:\n\n"
             f"👤 Имя: {full_name}\n"
-            f"🔗 Username: @{username if username else 'не указан'}\n"
+            f"🔗 Username: @{username}\n"
             f"📞 Номер телефона: {phone_number}\n\n"
             f"🔹 Модель: {context.user_data['model']}\n"
             f"🔹 Состояние: {context.user_data['condition']}\n"
@@ -146,6 +156,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Также ты можешь узнать адреса магазинов и контакты, используя соответствующие кнопки."
     )
 
+# Webhook
 @app.post(f"/{WEBHOOK_SECRET}")
 async def telegram_webhook(req: Request):
     body = await req.json()
@@ -153,16 +164,14 @@ async def telegram_webhook(req: Request):
     await telegram_app.update_queue.put(update)
     return {"ok": True}
 
+# Запуск приложения
 @app.on_event("startup")
 async def on_startup():
     global telegram_app
-
     telegram_app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[
-            MessageHandler(filters.TEXT & filters.Regex("^📱 Оставить заявку$"), start_form),
-        ],
+        entry_points=[MessageHandler(filters.Regex("^📱 Оставить заявку$"), start_form)],
         states={
             MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, model)],
             CONDITION: [MessageHandler(filters.TEXT & ~filters.COMMAND, condition)],
@@ -176,16 +185,10 @@ async def on_startup():
     telegram_app.add_handler(conv_handler)
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^ℹ️ О нас$"), about))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬 Адреса и контакты$"), contacts))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📱 Оставить заявку$"), start_form))
-    telegram_app.add_handler(MessageHandler(filters.ALL, help_command))
-    telegram_app.add_handler(CommandHandler("cancel", cancel))
-    telegram_app.add_handler(MessageHandler(filters.ALL, help_command))
-
-    telegram_app.add_handler(
-        CallbackQueryHandler(start_form_callback, pattern="^start_form$")
-    )
+    telegram_app.add_handler(MessageHandler(filters.Regex("^ℹ️ О нас$"), about))
+    telegram_app.add_handler(MessageHandler(filters.Regex("^🏬 Адреса и контакты$"), contacts))
+    telegram_app.add_handler(CallbackQueryHandler(start_form_callback, pattern="^start_form$"))
+    telegram_app.add_handler(CallbackQueryHandler(callback_handler, pattern="^show_phone$"))
 
     await telegram_app.initialize()
     await telegram_app.start()
