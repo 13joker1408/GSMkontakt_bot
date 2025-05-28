@@ -36,7 +36,7 @@ main_menu = ReplyKeyboardMarkup(main_menu_keyboard, resize_keyboard=True)
 inline_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("📱 Оставить заявку", callback_data="start_form")],
     [InlineKeyboardButton("🌐 Сайт", url="https://gsmkontakt.ru")],
-    [InlineKeyboardButton("📞 Позвонить", url="tel:+78003022071")]
+    InlineKeyboardButton("Позвонить: +7 800 302-20-71", callback_data="show_phone")
 ])
 
 app = FastAPI()
@@ -45,6 +45,12 @@ telegram_app: Application = None
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие:", reply_markup=inline_menu)
     await update.message.reply_text("Или используй кнопки ниже для информации:", reply_markup=main_menu)
+    
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "show_phone":
+        await query.edit_message_text("Позвонить можно по номеру: +7 800 302-20-71")
 
 async def start_form_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
