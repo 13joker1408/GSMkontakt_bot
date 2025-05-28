@@ -39,6 +39,7 @@ telegram_app: Application = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие:", reply_markup=main_menu)
+    return ConversationHandler.END
 
 async def start_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Напиши модель твоей техники:", reply_markup=ReplyKeyboardRemove())
@@ -169,7 +170,7 @@ async def on_startup():
             DISTRICT: [MessageHandler(filters.TEXT & ~filters.COMMAND, district)],
             PHONE: [MessageHandler(filters.CONTACT | filters.TEXT, phone)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
 
     telegram_app.add_handler(conv_handler)
