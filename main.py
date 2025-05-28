@@ -178,7 +178,7 @@ async def on_startup():
     telegram_app.add_handler(MessageHandler(filters.ALL, help_command))
 
     telegram_app.add_handler(
-        telegram.ext.CallbackQueryHandler(start_form_callback, pattern="^start_form$")
+        CallbackQueryHandler(start_form_callback, pattern="^start_form$")
     )
 
     await telegram_app.initialize()
