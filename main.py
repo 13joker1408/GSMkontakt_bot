@@ -175,7 +175,7 @@ async def on_startup():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^ℹ️ О нас$"), about))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬 Адреса и контакты$"), contacts))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("Адреса и контакты"), contacts))
 
     await telegram_app.initialize()
     await telegram_app.start()
