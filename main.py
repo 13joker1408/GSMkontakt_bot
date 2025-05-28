@@ -9,9 +9,9 @@ from telegram import (
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes,
-    filters, ConversationHandler, CallbackQueryHandler,
-    ApplicationBuilder
+    filters, ConversationHandler, CallbackQueryHandler
 )
+from telegram.ext import ApplicationBuilder
 
 load_dotenv()
 
@@ -45,7 +45,7 @@ telegram_app: Application = None
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие:", reply_markup=inline_menu)
     await update.message.reply_text("Или используй кнопки ниже для информации:", reply_markup=main_menu)
-    
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -127,18 +127,20 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🏬 Наши адреса:\n"
-        "1. 📍 Пролетарский: ул. Ложевая, д.125а, ТЦ «ПРОЛЕТАРСКИЙ» <a href='tel:+79997751825'>+7 (999) 775-18-25</a>\n"
-        "2. 📍 Заречье: ул. Максима Горького, д.35а <a href='tel:+79539726685'>+7 (953) 972-66-85</a>\n"
-        "3. 📍 Центр: ул. Каминского, д.4Б <a href='tel:+79520185472'>+7 (952) 018-54-72</a>\n"
-        "4. 📍 Советский: Красноармейский пр-т, д.19, ТЦ «ФАБРИКАНТ» <a href='tel:+79026978858'>+7 (902) 697-88-58</a>\n"
-        "5. 📍 Центр: ул. 9-мая д.2, «SPAR» <a href='tel:+79539625377'>+7 (953) 962-53-77</a>\n"
-        "📞 Телефон: <a href='tel:+78003022071'>8-800-302-20-71</a>\n"
-        "🌐 Сайт: gsmkontakt.ru\n"
-        "Telegram: @Strjke",
-        parse_mode="HTML"
-    )
+    text = "🏬 Наши адреса и телефоны:\n\nНажмите на нужный адрес, чтобы позвонить."
+
+    buttons = [
+        [InlineKeyboardButton("📍 Пролетарский: +7 (999) 775-18-25", url="tel:+79997751825")],
+        [InlineKeyboardButton("📍 Заречье: +7 (953) 972-66-85", url="tel:+79539726685")],
+        [InlineKeyboardButton("📍 Центр, ул. Каминского, д.4Б: +7 (952) 018-54-72", url="tel:+79520185472")],
+        [InlineKeyboardButton("📍 Советский: +7 (902) 697-88-58", url="tel:+79026978858")],
+        [InlineKeyboardButton("📍 Центр, ул. 9-мая д.2, «SPAR»: +7 (953) 962-53-77", url="tel:+79539625377")],
+        [InlineKeyboardButton("📞 Общий телефон: 8-800-302-20-71", url="tel:+78003022071")]
+    ]
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.message.reply_text(text, reply_markup=keyboard)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -163,7 +165,6 @@ async def on_startup():
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.TEXT & filters.Regex("^📱 Оставить заявку$"), start_form),
-            CallbackQueryHandler(start_form_callback, pattern="^start_form$"),
         ],
         states={
             MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, model)],
@@ -181,10 +182,13 @@ async def on_startup():
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^ℹ️ О нас$"), about))
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬 Адреса и контакты$"), contacts))
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^📱 Оставить заявку$"), start_form))
+    telegram_app.add_handler(MessageHandler(filters.ALL, help_command))
     telegram_app.add_handler(CommandHandler("cancel", cancel))
     telegram_app.add_handler(MessageHandler(filters.ALL, help_command))
 
-    # УДАЛИЛ telegram_app.add_handler(CallbackQueryHandler(start_form_callback, pattern="^start_form$"))
+    telegram_app.add_handler(
+        CallbackQueryHandler(start_form_callback, pattern="^start_form$")
+    )
 
     await telegram_app.initialize()
     await telegram_app.start()
