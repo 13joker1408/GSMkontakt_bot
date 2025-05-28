@@ -36,7 +36,7 @@ main_menu = ReplyKeyboardMarkup(main_menu_keyboard, resize_keyboard=True)
 inline_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("📱 Оставить заявку", callback_data="start_form")],
     [InlineKeyboardButton("🌐 Сайт", url="https://gsmkontakt.ru")],
-    InlineKeyboardButton("Позвонить: +7 800 302-20-71", callback_data="show_phone")
+    [InlineKeyboardButton("Позвонить: +7 800 302-20-71", callback_data="show_phone")]
 ])
 
 app = FastAPI()
