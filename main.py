@@ -41,7 +41,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие:", reply_markup=main_menu)
 
 async def start_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Напиши модель твоей техники:")
+    await update.message.reply_text("Напиши модель твоей техники:", reply_markup=ReplyKeyboardRemove())
     return MODEL
 
 async def model(update: Update, context: ContextTypes.DEFAULT_TYPE):
