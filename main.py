@@ -110,7 +110,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        '''"🏬 <b>Наши адреса и телефоны:</b>\n\n"
+        "🏬 <b>Наши адреса и телефоны:</b>\n\n"
         "1. 🏠 Заречье: ул. Максима Горького, д.35а\n"
         "   📞 <a href='tel:+79539726685'>+7 (953) 972-66-85</a>\n\n"
         "2. 🏠 Пролетарский: ул. Ложевая, д.125а, ТЦ «ПРОЛЕТАРСКИЙ»\n"
@@ -126,8 +126,9 @@ async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌐 <b>Сайт:</b> gsmkontakt.ru\n"
         "📱 <b>Telegram:</b> @Strjke",
         parse_mode="HTML"
-    '''
     
+    
+        '''
         "🏬 Наши адреса:\n"
         "1. 📍 Пролетарский: ул. Ложевая, д.125а, ТЦ «ПРОЛЕТАРСКИЙ»\n"
         "2. 📍 Заречье: ул. Максима Горького, д.35а\n"
@@ -137,6 +138,7 @@ async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📞 Телефон: 8-800-302-20-71\n"
         "🌐 Сайт: gsmkontakt.ru\n"
         "Telegram: @Strjke"
+        '''
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -175,7 +177,7 @@ async def on_startup():
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^ℹ️ О нас$"), about))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬Адреса и контакты$"), contacts))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬 Адреса и контакты$"), contacts))
 
     await telegram_app.initialize()
     await telegram_app.start()
