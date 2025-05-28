@@ -2,13 +2,14 @@ import os
 import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+
 from telegram import (
     Update, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup,
     InlineKeyboardButton, ReplyKeyboardRemove
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes,
-    filters, ConversationHandler
+    filters, ConversationHandler, CallbackQueryHandler
 )
 from telegram.ext import ApplicationBuilder
 
