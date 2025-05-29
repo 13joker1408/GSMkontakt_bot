@@ -112,7 +112,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🏬 <b>Наши адреса и телефоны:</b>\n\n"
-        "1. 🏠 <b>Заречье:</b> <a href='https://yandex.ru/maps/?text=ул. Максима Горького, д.35а'>ул. Максима Горького, д.35а</a>\n"
+        "1. 🏠 <b>Заречье:</b> <a href='https://yandex.ru/maps/org/gsmkontakt/1276292498/?ll=37.608080%2C54.215755&z=13'>ул. Максима Горького, д.35а</a>\n"
         "   📞 +7-953-972-66-85\n\n"
         "2. 🏠 <b>Пролетарский:</b> <a href='https://yandex.ru/maps/?text=ул. Ложевая, д.125а, ТЦ ПРОЛЕТАРСКИЙ'>ул. Ложевая, д.125а, ТЦ «ПРОЛЕТАРСКИЙ»</a>\n"
         "   📞 +7-999-775-18-25\n\n"
