@@ -125,7 +125,8 @@ async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📞 <b>Телефон горячей линии:</b> +7-800-302-20-71\n\n"
         "🌐 <b>Сайт:</b> gsmkontakt.ru\n"
         "📱 <b>Telegram:</b> @Strjke",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
