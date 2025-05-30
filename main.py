@@ -13,13 +13,28 @@ from telegram.ext import (
     ConversationHandler
 )
 from telegram.ext import ApplicationBuilder
+import asyncio
+from functools import wraps
 
 load_dotenv()
 
-# Подключение к MongoDB
-client = MongoClient(os.getenv("MONGODB_URI"))
+# Подключение к MongoDB с оптимизированными настройками
+client = MongoClient(
+    os.getenv("MONGODB_URI"),
+    maxPoolSize=10,  # Ограничиваем пул соединений
+    minPoolSize=1,
+    maxIdleTimeMS=30000,  # 30 сек
+    serverSelectionTimeoutMS=5000,  # 5 сек таймаут
+    socketTimeoutMS=10000  # 10 сек таймаут сокета
+)
 db = client[os.getenv("MONGO_DB_NAME")]
 users_collection = db[os.getenv("MONGO_COLLECTION_NAME")]
+
+# Создаем индекс для быстрого поиска по user_id (если не существует)
+try:
+    users_collection.create_index("user_id", unique=True)
+except Exception as e:
+    print(f"Индекс уже существует или ошибка создания: {e}")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -47,12 +62,17 @@ admin_menu = ReplyKeyboardMarkup(admin_menu_keyboard, resize_keyboard=True)
 app = FastAPI()
 telegram_app: Application = None
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    username = update.effective_user.username
-    full_name = f"{update.effective_user.first_name or ''} {update.effective_user.last_name or ''}".strip()
+# Декоратор для асинхронного выполнения операций с БД
+def run_in_executor(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func, *args, **kwargs)
+    return wrapper
 
-    # Сохраняем пользователя в базе данных
+# Асинхронные функции для работы с БД
+@run_in_executor
+def save_user_to_db(user_id, username, full_name):
     try:
         users_collection.update_one(
             {"user_id": user_id},
@@ -63,13 +83,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }},
             upsert=True
         )
-        print(f"✅ Пользователь сохранен: ID={user_id}, Name={full_name}")
+        return True
     except Exception as e:
         print(f"❌ Ошибка сохранения пользователя: {e}")
+        return False
+
+@run_in_executor
+def get_users_from_db():
+    try:
+        users_cursor = users_collection.find(
+            {}, 
+            {"_id": 0, "user_id": 1, "username": 1, "full_name": 1}
+        ).limit(100)  # Ограничиваем количество для быстродействия
+        return list(users_cursor)
+    except Exception as e:
+        print(f"❌ Ошибка получения пользователей: {e}")
+        return []
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    full_name = f"{update.effective_user.first_name or ''} {update.effective_user.last_name or ''}".strip()
+
+    # Асинхронно сохраняем пользователя (не блокируем ответ)
+    asyncio.create_task(save_user_to_db(user_id, username, full_name))
     
-    # Проверяем, является ли пользователь администратором
-    print(f"🔍 Проверка админа: user_id={user_id}, ADMIN_ID={ADMIN_ID}, равны={user_id == ADMIN_ID}")
-    
+    # Сразу отвечаем пользователю, не дожидаясь сохранения в БД
     if user_id == ADMIN_ID:
         await update.message.reply_text("🔑 Добро пожаловать, администратор! Выбери действие:", reply_markup=admin_menu)
     else:
@@ -125,9 +164,10 @@ async def phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔹 Район: {context.user_data['district']}"
         )
 
-        await context.bot.send_message(chat_id=ADMIN_ID, text=summary)
+        # Отправляем сообщение админу асинхронно
+        asyncio.create_task(context.bot.send_message(chat_id=ADMIN_ID, text=summary))
         
-        # Возвращаем правильное меню в зависимости от пользователя
+        # Сразу отвечаем пользователю
         user_id = update.effective_user.id
         menu = admin_menu if user_id == ADMIN_ID else main_menu
         await update.message.reply_text("Спасибо! Мы скоро свяжемся с тобой.", reply_markup=menu)
@@ -173,43 +213,42 @@ async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    print(f"🔍 Запрос списка пользователей от: user_id={user_id}, ADMIN_ID={ADMIN_ID}")
     
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ У вас нет доступа к этой команде.")
         return
 
+    # Сначала отправляем сообщение о загрузке
+    loading_message = await update.message.reply_text("⏳ Загружаю список пользователей...")
+    
     try:
-        # Получаем всех пользователей из базы данных
-        users_cursor = users_collection.find({}, {"_id": 0, "user_id": 1, "username": 1, "full_name": 1})
-        users_list = list(users_cursor)
+        # Асинхронно получаем пользователей
+        users_list_data = await get_users_from_db()
         
-        print(f"🔍 Найдено пользователей в БД: {len(users_list)}")
-        
-        if not users_list:
-            await update.message.reply_text("👥 Пользователей не найдено в базе данных.")
+        if not users_list_data:
+            await loading_message.edit_text("👥 Пользователей не найдено в базе данных.")
             return
 
         user_lines = []
-        for i, user in enumerate(users_list, 1):
+        for i, user in enumerate(users_list_data[:50], 1):  # Показываем только первые 50
             username = user.get('username', '-')
             full_name = user.get('full_name', '-')
             user_id_str = user.get('user_id', '-')
             
-            line = f"{i}. ID: {user_id_str}\n   Имя: {full_name}\n   Username: @{username if username != '-' else 'не указан'}"
+            line = f"{i}. ID: {user_id_str}, Имя: {full_name}, Username: @{username if username != '-' else 'не указан'}"
             user_lines.append(line)
 
-        message = f"👥 Список пользователей ({len(users_list)} чел.):\n\n" + "\n\n".join(user_lines)
+        message = f"👥 Список пользователей (показано {len(user_lines)} из {len(users_list_data)}):\n\n" + "\n".join(user_lines)
         
         # Ограничение Telegram на длину сообщения
         if len(message) > 4000:
-            message = message[:4000] + "\n\n...список слишком длинный, показаны первые пользователи."
+            message = message[:4000] + "\n\n...список обрезан."
 
-        await update.message.reply_text(message)
+        await loading_message.edit_text(message)
         
     except Exception as e:
         print(f"❌ Ошибка при получении списка пользователей: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при получении списка пользователей.")
+        await loading_message.edit_text("❌ Произошла ошибка при получении списка пользователей.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -218,14 +257,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Также ты можешь узнать адреса магазинов и контакты, используя соответствующие кнопки."
     )
 
-# Функция для обработки неизвестных сообщений
+# Упрощенная функция для неизвестных сообщений
 async def handle_unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    message_text = update.message.text if update.message and update.message.text else ""
-    
-    print(f"🔍 Неизвестное сообщение от {user_id}: '{message_text}'")
-    
-    # Возвращаем правильное меню
     menu = admin_menu if user_id == ADMIN_ID else main_menu
     await update.message.reply_text(
         "❓ Не понимаю эту команду. Воспользуйтесь кнопками меню:",
@@ -258,7 +292,7 @@ async def on_startup():
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("start", start)],
     )
 
-    # Добавляем обработчики в правильном порядке
+    # Добавляем обработчики
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
     telegram_app.add_handler(conv_handler)
@@ -268,7 +302,7 @@ async def on_startup():
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^🏬 Адреса и контакты$"), contacts))
     telegram_app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^👥 Пользователи$"), users_list))
     
-    # Обработчик неизвестных сообщений (должен быть последним!)
+    # Обработчик неизвестных сообщений (последний!)
     telegram_app.add_handler(MessageHandler(filters.TEXT, handle_unknown_message))
 
     await telegram_app.initialize()
