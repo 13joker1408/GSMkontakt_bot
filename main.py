@@ -74,9 +74,7 @@ def run_in_executor(func):
 @run_in_executor
 def save_user_to_db(user_id, username, full_name):
     try:
-        print(f"🔄 Попытка сохранить пользователя: ID={user_id}, Name={full_name}, Username={username}")
-        
-        result = users_collection.update_one(
+        users_collection.update_one(
             {"user_id": user_id},
             {"$set": {
                 "user_id": user_id,
@@ -85,50 +83,21 @@ def save_user_to_db(user_id, username, full_name):
             }},
             upsert=True
         )
-        
-        print(f"✅ Пользователь сохранен: matched={result.matched_count}, modified={result.modified_count}, upserted_id={result.upserted_id}")
-        
-        # Проверяем, что пользователь действительно сохранился
-        saved_user = users_collection.find_one({"user_id": user_id})
-        if saved_user:
-            print(f"✅ Подтверждение: пользователь найден в БД: {saved_user}")
-            return True
-        else:
-            print(f"❌ Пользователь не найден в БД после сохранения!")
-            return False
-            
+        return True
     except Exception as e:
         print(f"❌ Ошибка сохранения пользователя: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 @run_in_executor
 def get_users_from_db():
     try:
-        print(f"🔍 Поиск пользователей в коллекции: {users_collection.name}")
-        
-        # Проверяем общее количество документов
-        total_count = users_collection.count_documents({})
-        print(f"🔍 Всего документов в коллекции: {total_count}")
-        
         users_cursor = users_collection.find(
             {}, 
             {"_id": 0, "user_id": 1, "username": 1, "full_name": 1}
-        ).limit(100)
-        
-        users_list = list(users_cursor)
-        print(f"🔍 Получено пользователей: {len(users_list)}")
-        
-        # Выводим первых нескольких пользователей для диагностики
-        for i, user in enumerate(users_list[:3]):
-            print(f"🔍 Пользователь {i+1}: {user}")
-            
-        return users_list
+        ).limit(100)  # Ограничиваем количество для быстродействия
+        return list(users_cursor)
     except Exception as e:
         print(f"❌ Ошибка получения пользователей: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,16 +105,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username
     full_name = f"{update.effective_user.first_name or ''} {update.effective_user.last_name or ''}".strip()
 
-    print(f"🔄 Обработка /start от пользователя: ID={user_id}, Name={full_name}, Username={username}")
+    # Асинхронно сохраняем пользователя (не блокируем ответ)
+    asyncio.create_task(save_user_to_db(user_id, username, full_name))
     
-    # Сохраняем пользователя синхронно, чтобы убедиться, что он сохранился
-    try:
-        save_result = await save_user_to_db(user_id, username, full_name)
-        print(f"🔄 Результат сохранения: {save_result}")
-    except Exception as e:
-        print(f"❌ Исключение при сохранении: {e}")
-    
-    # Отвечаем пользователю
+    # Сразу отвечаем пользователю, не дожидаясь сохранения в БД
     if user_id == ADMIN_ID:
         await update.message.reply_text("🔑 Добро пожаловать, администратор! Выбери действие:", reply_markup=admin_menu)
     else:
@@ -287,54 +250,12 @@ async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"❌ Ошибка при получении списка пользователей: {e}")
         await loading_message.edit_text("❌ Произошла ошибка при получении списка пользователей.")
 
-async def debug_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда для отладки БД (только для админа)"""
-    user_id = update.effective_user.id
-    
-    if user_id != ADMIN_ID:
-        return
-    
-    try:
-        # Проверяем подключение
-        client.admin.command('ping')
-        
-        # Получаем статистику коллекции
-        total_docs = users_collection.count_documents({})
-        
-        # Получаем несколько записей
-        sample_users = list(users_collection.find({}).limit(5))
-        
-        debug_info = f"🔧 Отладка БД:\n\n"
-        debug_info += f"✅ MongoDB подключение: OK\n"
-        debug_info += f"📊 База: {db.name}\n"
-        debug_info += f"📊 Коллекция: {users_collection.name}\n"
-        debug_info += f"📊 Всего документов: {total_docs}\n\n"
-        
-        if sample_users:
-            debug_info += f"👥 Примеры записей:\n"
-            for i, user in enumerate(sample_users, 1):
-                debug_info += f"{i}. ID: {user.get('user_id')}, Name: {user.get('full_name')}\n"
-        else:
-            debug_info += "❌ Записей не найдено"
-            
-        await update.message.reply_text(debug_info)
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка отладки БД: {e}")
-
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (
+    await update.message.reply_text(
         "📌 Как работает бот:\n\n"
         "Нажми кнопку '📱 Оставить заявку', чтобы отправить информацию о технике, которую хочешь продать.\n"
         "Также ты можешь узнать адреса магазинов и контакты, используя соответствующие кнопки."
     )
-    
-    # Добавляем команды для админа
-    user_id = update.effective_user.id
-    if user_id == ADMIN_ID:
-        help_text += "\n\n🔧 Команды админа:\n/debug_db - проверить БД"
-    
-    await update.message.reply_text(help_text)
 
 # Упрощенная функция для неизвестных сообщений
 async def handle_unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -356,26 +277,6 @@ async def telegram_webhook(req: Request):
 async def on_startup():
     global telegram_app
 
-    # Проверяем подключение к MongoDB при запуске
-    try:
-        # Пингуем MongoDB
-        client.admin.command('ping')
-        print("✅ MongoDB подключение успешно")
-        
-        # Проверяем доступ к коллекции
-        print(f"🔍 База данных: {db.name}")
-        print(f"🔍 Коллекция: {users_collection.name}")
-        print(f"🔍 Количество документов в коллекции: {users_collection.count_documents({})}")
-        
-        # Выводим несколько существующих записей
-        existing_users = list(users_collection.find({}).limit(3))
-        print(f"🔍 Существующие пользователи: {existing_users}")
-        
-    except Exception as e:
-        print(f"❌ Ошибка подключения к MongoDB: {e}")
-        import traceback
-        traceback.print_exc()
-
     telegram_app = ApplicationBuilder().token(TOKEN).build()
 
     # ConversationHandler для заявок
@@ -394,7 +295,6 @@ async def on_startup():
     # Добавляем обработчики
     telegram_app.add_handler(CommandHandler("start", start))
     telegram_app.add_handler(CommandHandler("help", help_command))
-    telegram_app.add_handler(CommandHandler("debug_db", debug_db))
     telegram_app.add_handler(conv_handler)
     
     # Обработчики кнопок меню
