@@ -118,7 +118,7 @@ async def contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "   📞 +7-999-775-18-25\n\n"
         "3. 🏠 <b>Центр:</b> <a href='https://yandex.ru/maps/org/gsmkontakt/1650827512/'>ул. Каминского, д.4Б</a>\n"
         "   📞 +7-952-018-54-72\n\n"
-        "4. 🏠 <b>Центр:</b> <a href='https://yandex.ru/maps/org/gsmkontakt/107114858592/'>ул. 9 мая, д.2, «SPAR»</a>\n"
+        "4. 🏠 <b>Советский:</b> <a href='https://yandex.ru/maps/org/gsmkontakt/107114858592/'>ул. 9 мая, д.2, «SPAR»</a>\n"
         "   📞 +7-953-962-53-77\n\n"
         "5. 🏠 <b>Советский:</b> <a href='https://yandex.ru/maps/org/gsmkontakt/1933915362/'>Красноармейский пр-т, д.19, ТЦ «ФАБРИКАНТ»</a>\n"
         "   📞 +7-902-697-88-58\n\n"
