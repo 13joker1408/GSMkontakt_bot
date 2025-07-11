@@ -44,7 +44,7 @@ logging.basicConfig(
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 216903753))
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "supersecretpath")
-APP_URL = os.getenv("APP_URL")
+APP_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 MODEL, CONDITION, KIT, DISTRICT, PHONE = range(5)
 
